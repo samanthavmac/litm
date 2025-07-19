@@ -47,7 +47,6 @@ def extract_lyrics_clip_route():
         return jsonify({"error": f"Video file {video_filename} not found"}), 404
     
     try:
-        # You'll need to provide your TwelveLabs index ID
         index_id = data.get('index_id')
 
         if not index_id:
@@ -179,6 +178,49 @@ def upload_video_only_route():
             "task_id": upload_task.id,
             "status": upload_task.status
         })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@bp.route('/extract_video_segments', methods=['POST'])
+def extract_video_segments_route():
+    """Extract video segments as separate MP4 files"""
+    data = request.get_json()
+    video_filename = data.get('video_filename')
+    index_id = data.get('index_id')
+    lyrics = data.get('lyrics')
+    
+    if not all([video_filename, index_id, lyrics]):
+        return jsonify({"error": "Missing video_filename, index_id, or lyrics"}), 400
+    
+    video_path = os.path.join('app', 'static', 'video_clips', video_filename)
+    
+    if not os.path.exists(video_path):
+        return jsonify({"error": f"Video file {video_filename} not found"}), 404
+    
+    try:
+        from app.services.video_services import extract_clip_from_local_video, extract_video_segments
+        
+        # First, get the timestamps
+        clip_result = extract_clip_from_local_video(video_path, lyrics, index_id)
+        
+        if not clip_result or not clip_result.get('best_match'):
+            return jsonify({
+                "success": False,
+                "message": "No matching clips found"
+            })
+        
+        # Extract the video segment (only the best match)
+        extracted_files = extract_video_segments(video_path, [clip_result['best_match']])
+        
+        return jsonify({
+            "success": True,
+            "search_results": clip_result,
+            "extracted_files": extracted_files
+        })
+        
     except Exception as e:
         return jsonify({
             "success": False,
