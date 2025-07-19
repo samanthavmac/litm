@@ -26,13 +26,18 @@ def recognize_song_route():
     file.save(save_path)
 
     try:
-        print("testing song now")
         results = recognize_song(save_path)
-        print(results)
     finally:
         os.remove(save_path)
 
-    return jsonify({"results": results})
+    try:
+        phone_key = '16474795038'
+        user_song_options[phone_key] = results
+        send_message(results)
+        return jsonify({"status": "message sent"})
+    except Exception as e:
+        return jsonify({"error": "Song recognition failed", "details": str(e)}), 500
+
 
 @bp.route('/extract_lyrics_clip', methods=['POST'])
 def extract_lyrics_clip_route():
@@ -232,20 +237,7 @@ def extract_video_segments_route():
             "error": str(e)
         }), 500
 
-        results = recognize_song(save_path)
-    finally:
-        os.remove(save_path)
-
-    try:
-
-        print("sending message")
-        phone_key = '16474795038'
-        user_song_options[phone_key] = results
-        send_message(results)
-        return jsonify({"status": "message sent"})
-    except Exception as e:
-        return jsonify({"error": "Song recognition failed", "details": str(e)}), 500
-
+  
 @bp.route('/instagram/login', methods=['POST'])
 def instagram_login():
     data = request.get_json()
@@ -277,7 +269,6 @@ def instagram_upload_story():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-    
 @bp.route("/sms", methods=['POST'])
 def sms_reply():
     from_number = request.form.get('From')

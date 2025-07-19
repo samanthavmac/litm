@@ -3,7 +3,6 @@ from pydub import AudioSegment
 from app.config import Config
 from openai import OpenAI
 import json
-import os
 
 def recognize_song(audio_file_path):
 
