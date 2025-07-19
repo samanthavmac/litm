@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from app.services.audio_services import recognize_song, find_popular
-from app.services import instagram_services as ig_service
+from app.services.instagram_services import login_user, upload_story, create_highlight, add_to_highlight
 import os
 import json
 
@@ -45,30 +45,49 @@ def recognize_song_route():
 @bp.route('/instagram/login', methods=['POST'])
 def instagram_login():
     data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-
-    if not username or not password:
-        return jsonify({"error": "Username and password required"}), 400
-
     try:
-        result = ig_service.login_user(username, password)
+        result = login_user(data['username'], data['password'], data.get('verification_code'))
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
 @bp.route('/instagram/upload_story', methods=['POST'])
-def instagram_upload_story():
+def instagram_upload():
     data = request.get_json()
     username = data.get('username')
     video_path = data.get('video_path')
-    caption = data.get('caption', '')
+    caption = data.get('caption', "")
 
-    if not username or not video_path:
-        return jsonify({"error": "Username and video_path required"}), 400
+    # mention = data.get('mention')
+    # link = data.get('link')
+    # hashtag = data.get('hashtag')
+    # media = data.get('media')
 
     try:
-        result = ig_service.upload_story(username, video_path, caption)
+        result = upload_story(
+            username=username,
+            video_path=video_path,
+            caption=caption
+        )
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+@bp.route('/instagram/create_highlight', methods=['POST'])
+def instagram_create_highlight():
+    data = request.get_json()
+    return jsonify(create_highlight(
+        data['username'],
+        data['title'],
+        data['story_media_ids'],
+        data.get('cover_story_id')
+    ))
+
+@bp.route('/instagram/add_to_highlight', methods=['POST'])
+def instagram_add_to_highlight():
+    data = request.get_json()
+    return jsonify(add_to_highlight(
+        data['username'],
+        data['highlight_id'],
+        data['story_media_ids']
+    ))

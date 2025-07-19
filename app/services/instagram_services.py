@@ -1,91 +1,120 @@
 from instagrapi import Client
+from instagrapi.types import StoryMention, StoryMedia, StoryLink, StoryHashtag
 import os
 
 # temp: in-memory session store (add db later)
 user_sessions = {}
 
-def login_user(username, password):
+def login_user(username, password, verification_code=None):
     cl = Client()
-    try:
-        cl.login(username, password)
-    except Exception as e:
-        raise Exception(f"Login failed: {str(e)}")
-    
+    if os.path.exists(f'sessions/{username}.json'):
+        cl.load_settings(f'sessions/{username}.json')
+        cl.login(username, password)  # uses session, avoids 2FA
+    else:
+        cl.login(username, password, verification_code=verification_code)
+    os.makedirs('sessions', exist_ok=True)
+    cl.dump_settings(f'sessions/{username}.json')
     user_sessions[username] = cl
     return {"status": "logged_in", "username": username}
 
 def is_user_logged_in(username):
     return username in user_sessions
 
+# no video extra sorry :'(
 def upload_story(username, video_path, caption=""):
     if username not in user_sessions:
         raise Exception("User not logged in")
 
     cl = user_sessions[username]
-    
+
+    full_path = os.path.abspath(video_path)
+    if not os.path.exists(full_path):
+        raise Exception(f"Video file not found: {full_path}")
+
     try:
-        media = cl.video_upload_to_story(video_path, caption)
+        media = cl.video_upload_to_story(full_path, caption)
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise Exception(f"Story upload failed: {str(e)}")
-    
+
     return {"status": "uploaded", "media_id": media.pk}
 
+# def upload_story(username, video_path, caption="", mention=None, link=None, hashtag=None, media=None):
+#     if username not in user_sessions:
+#         raise Exception("User not logged in")
+#     cl = user_sessions[username]
 
-# for official ig api
-# INSTAGRAM_CLIENT_ID = os.getenv("INSTAGRAM_CLIENT_ID")
-# INSTAGRAM_CLIENT_SECRET = os.getenv("INSTAGRAM_CLIENT_SECRET")
-# REDIRECT_URI = os.getenv("INSTAGRAM_REDIRECT_URI")
-# def get_auth_url():
-#     return (
-#         f"https://api.instagram.com/oauth/authorize"
-#         f"?client_id={INSTAGRAM_CLIENT_ID}"
-#         f"&redirect_uri={REDIRECT_URI}"
-#         f"&scope=user_profile,user_media"
-#         f"&response_type=code"
-#     )
+#     full_path = os.path.abspath(video_path)
+#     if not os.path.exists(full_path):
+#         raise Exception(f"Video file not found: {full_path}")
 
-# def exchange_code_for_token(code):
-#     url = "https://api.instagram.com/oauth/access_token"
-#     data = {
-#         "client_id": INSTAGRAM_CLIENT_ID,
-#         "client_secret": INSTAGRAM_CLIENT_SECRET,
-#         "grant_type": "authorization_code",
-#         "redirect_uri": REDIRECT_URI,
-#         "code": code,
-#     }
-#     response = requests.post(url, data=data)
-#     response.raise_for_status()
-#     token_info = response.json()
-#     return token_info  # contains access_token, user_id
+#     story_mention = None
+#     if mention:
+#         user_info = cl.user_info_by_username(mention['username'])
+#         story_mention = StoryMention(
+#             user=user_info,
+#             x=mention['x'],
+#             y=mention['y'],
+#             width=mention['width'],
+#             height=mention['height']
+#         )
 
-# def store_user_token(user_id, token):
-#     user_tokens[user_id] = token
+#     story_link = None
+#     if link:
+#         story_link = StoryLink(**link)
 
-# def get_user_token(user_id):
-#     return user_tokens.get(user_id)
+#     story_hashtag = None
+#     if hashtag:
+#         ht_info = cl.hashtag_info(hashtag['name'])
+#         story_hashtag = StoryHashtag(
+#             hashtag=ht_info,
+#             x=hashtag['x'],
+#             y=hashtag['y'],
+#             width=hashtag['width'],
+#             height=hashtag['height']
+#         )
 
-# def upload_story(user_id, image_url, caption=""):
-#     token = get_user_token(user_id)
-#     if not token:
-#         raise Exception("User not authenticated")
+#     story_media = None
+#     if media:
+#         story_media = StoryMedia(
+#             media_pk=media['media_pk'],
+#             x=media['x'],
+#             y=media['y'],
+#             width=media['width'],
+#             height=media['height']
+#         )
 
-#     # Upload container
-#     url = f"https://graph.facebook.com/v19.0/{user_id}/media"
-#     params = {
-#         "image_url": image_url,
-#         "caption": caption,
-#         "access_token": token
-#     }
-#     resp = requests.post(url, data=params)
-#     resp.raise_for_status()
-#     creation_id = resp.json()["id"]
+#     try:
+#         media_obj = cl.video_upload_to_story(
+#             full_path,
+#             caption,
+#             mentions=[story_mention] if story_mention else None,
+#             links=[story_link] if story_link else None,
+#             hashtags=[story_hashtag] if story_hashtag else None,
+#             medias=[story_media] if story_media else None
+#         )
+#     except Exception as e:
+#         import traceback
+#         traceback.print_exc()
+#         raise Exception(f"Story upload failed: {str(e)}")
 
-#     # Publish container
-#     publish_url = f"https://graph.facebook.com/v19.0/{user_id}/media_publish"
-#     publish_params = {
-#         "creation_id": creation_id,
-#         "access_token": token
-#     }
-#     publish_resp = requests.post(publish_url, data=publish_params)
-#     publish_resp.raise_for_status()
-#     return publish_resp.json()
+#     return {"status": "uploaded", "media_id": media_obj.pk}
+
+def create_highlight(username, title, story_media_ids, cover_story_id=None):
+    if username not in user_sessions:
+        raise Exception("Not logged in")
+    cl = user_sessions[username]
+    highlight = cl.highlight_create(
+        title=title,
+        story_ids=story_media_ids,
+        cover_story_id=cover_story_id or story_media_ids[0]
+    )
+    return {"highlight_id": highlight.pk, "title": highlight.title}
+
+def add_to_highlight(username, highlight_id, story_media_ids):
+    if username not in user_sessions:
+        raise Exception("Not logged in")
+    cl = user_sessions[username]
+    highlight = cl.highlight_add_stories(highlight_id, story_media_ids)
+    return {"highlight_id": highlight.pk, "media_count": len(highlight.media_ids)}
