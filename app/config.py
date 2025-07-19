@@ -7,3 +7,4 @@ class Config:
     ARC_KEY = os.environ.get('ARC_KEY')
     ARC_ACCESS_SECRET = os.environ.get('ARC_ACCESS_SECRET')
     TWELVELABS_API_KEY = os.environ.get('TWELVELABS_API_KEY')
+    OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')

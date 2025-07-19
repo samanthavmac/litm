@@ -12,7 +12,6 @@ import subprocess
 load_dotenv()
 
 def get_client():
-    """Get TwelveLabs client with API key"""
     if not Config.TWELVELABS_API_KEY:
         raise ValueError("TWELVELABS_API_KEY environment variable not set")
     return TwelveLabs(api_key=Config.TWELVELABS_API_KEY)
@@ -21,10 +20,12 @@ def create_index(name: str, model: str = "marengo2.7"):
     client = get_client()
     index = client.index.create(name=name, models=[{"name": model, "options": ["audio"]}])
     return index
-
-def upload_video(video_url: str, index_id: str):
-    client = get_client()
-    task = client.task.create(index_id=index_id, url=video_url)
+    
+def upload_video(self, 
+                video_path: Union[str, Path],
+                index_id: str):
+    
+    task = self.client.task.create(index_id=index_id, url=video_path)
     print(f"Created task: id={task.id}")
 
     task.wait_for_done(sleep_interval=5, callback=lambda t: print(f"  Status={t.status}"))
