@@ -19,7 +19,9 @@ def recognize_song_route():
     file.save(save_path)
 
     try:
+        print("testing song now")
         results = recognize_song(save_path)
+        print(results)
     finally:
         os.remove(save_path)
 
