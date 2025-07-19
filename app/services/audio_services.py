@@ -68,5 +68,3 @@ def find_popular(song_title, song_artist):
         ]
     )
     return completion.choices[0].message.content
-
-
