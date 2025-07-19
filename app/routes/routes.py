@@ -239,6 +239,33 @@ def extract_video_segments_route():
             "error": str(e)
         }), 500
 
+
+@bp.route("/sms", methods=['POST'])
+def sms_reply():
+    from_number = request.form.get('From')
+    song_number_str = request.form.get('Body')
+
+    phone_key = from_number.lstrip('+')
+
+    try:
+        song_number = int(song_number_str)
+    except (ValueError, TypeError):
+        song_number = None
+
+    resp = MessagingResponse()
+
+    if phone_key in user_song_options and song_number is not None:
+        songs = user_song_options[phone_key]
+        if 1 <= song_number <= len(songs):
+            song = songs[song_number-1]
+            popular_part = find_popular(song['title'], song['artist'])
+            resp.message(f"Sounds good! We'll be posting a video of '{song['title']}' by {song['artist']} soon! \nThe story will include the snippet with \"{popular_part}\"")
+        else:
+            resp.message("Sorry, that number is out of range. Please reply with a valid number.")
+    else:
+        resp.message("Sorry, we couldn't find your songs list or your reply was invalid.")
+
+    return Response(str(resp), mimetype="application/xml")
   
 @bp.route('/instagram/login', methods=['POST'])
 def instagram_login():
@@ -270,60 +297,6 @@ def instagram_upload():
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
-
-@bp.route("/sms", methods=['POST'])
-def sms_reply():
-    from_number = request.form.get('From')
-    song_number_str = request.form.get('Body')
-
-    phone_key = from_number.lstrip('+')
-
-    try:
-        song_number = int(song_number_str)
-    except (ValueError, TypeError):
-        song_number = None
-
-    resp = MessagingResponse()
-
-    if phone_key in user_song_options and song_number is not None:
-        songs = user_song_options[phone_key]
-        if 1 <= song_number <= len(songs):
-            song = songs[song_number-1]
-            popular_part = find_popular(song['title'], song['artist'])
-            resp.message(f"Sounds good! We'll be posting a video of '{song['title']}' by {song['artist']} soon! \nThe story will include the snippet with \"{popular_part}\"")
-        else:
-            resp.message("Sorry, that number is out of range. Please reply with a valid number.")
-    else:
-        resp.message("Sorry, we couldn't find your songs list or your reply was invalid.")
-
-    return Response(str(resp), mimetype="application/xml")
-
-@bp.route("/sms", methods=['POST'])
-def sms_reply():
-    from_number = request.form.get('From')
-    song_number_str = request.form.get('Body')
-
-    phone_key = from_number.lstrip('+')
-
-    try:
-        song_number = int(song_number_str)
-    except (ValueError, TypeError):
-        song_number = None
-
-    resp = MessagingResponse()
-
-    if phone_key in user_song_options and song_number is not None:
-        songs = user_song_options[phone_key]
-        if 1 <= song_number <= len(songs):
-            song = songs[song_number-1]
-            popular_part = find_popular(song['title'], song['artist'])
-            resp.message(f"Sounds good! We'll be posting a video of '{song['title']}' by {song['artist']} soon! \nThe story will include the snippet with \"{popular_part}\"")
-        else:
-            resp.message("Sorry, that number is out of range. Please reply with a valid number.")
-    else:
-        resp.message("Sorry, we couldn't find your songs list or your reply was invalid.")
-
-    return Response(str(resp), mimetype="application/xml")
 
 @bp.route('/instagram/create_highlight', methods=['POST'])
 def instagram_create_highlight():
