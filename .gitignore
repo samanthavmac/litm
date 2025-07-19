@@ -1,0 +1,22 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# pip cache folder (optional)
+pip-wheel-metadata/
+
+# Flask/Django cache, e.g. instance folder or cache dirs
+instance/
+.cache/
+.cache/*
+
+# Temporary files or folders you use as cache
+temp_uploads/
+tmp/
+tmp/*
+*.log
+
+# OS cache files (macOS)
+.DS_Store
+
+.env

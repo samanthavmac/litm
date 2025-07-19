@@ -1,20 +1,14 @@
 from flask import Flask
 from flask_cors import CORS
+from app.routes.routes import bp as main_bp
 
 from dotenv import load_dotenv
-import os
 
 def create_app():
     app = Flask(__name__)
-
-    # Enable CORS if needed
+    load_dotenv()
     CORS(app)
 
-
-def create_app():
-    load_dotenv()
-
-    # Register services
-    # app.register_blueprint(audio_bp, url_prefix='/audio')
+    app.register_blueprint(main_bp)
 
     return app
