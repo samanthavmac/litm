@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from app.services.audio_services import recognize_song, find_popular
+from app.services import instagram_services as ig_service
 import os
 import json
 
@@ -40,4 +41,34 @@ def recognize_song_route():
         })  
     except Exception as e:
         return jsonify({"error": "Song recognition failed", "details": str(e)}), 500
-    
+
+@bp.route('/instagram/login', methods=['POST'])
+def instagram_login():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+
+    if not username or not password:
+        return jsonify({"error": "Username and password required"}), 400
+
+    try:
+        result = ig_service.login_user(username, password)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@bp.route('/instagram/upload_story', methods=['POST'])
+def instagram_upload_story():
+    data = request.get_json()
+    username = data.get('username')
+    video_path = data.get('video_path')
+    caption = data.get('caption', '')
+
+    if not username or not video_path:
+        return jsonify({"error": "Username and video_path required"}), 400
+
+    try:
+        result = ig_service.upload_story(username, video_path, caption)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
