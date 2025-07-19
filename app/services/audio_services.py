@@ -44,7 +44,6 @@ def recognize_song(audio_file_path):
                     "artist": artist,
                     "timestamp": timestamp
                 })
-
     return results
 
 def find_popular(song_title, song_artist):
@@ -68,9 +67,6 @@ def find_popular(song_title, song_artist):
              """}
         ]
     )
-
-    print(completion.choices[0].message.content)
-
     return completion.choices[0].message.content
 
 
