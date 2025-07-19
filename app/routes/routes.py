@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
-from app.services.audio_services import recognize_song
+from app.services.audio_services import recognize_song, find_popular
 import os
+import json
 
 bp = Blueprint('main', __name__)
 
@@ -19,10 +20,24 @@ def recognize_song_route():
     file.save(save_path)
 
     try:
-        print("testing song now")
-        results = recognize_song(save_path)
-        print(results)
+        results_raw = recognize_song(save_path)
+        results = json.loads(results_raw)
     finally:
         os.remove(save_path)
 
-    return jsonify({"results": results})
+    try:
+        song_data = results[0]
+        title = song_data['title']
+        artists = song_data.get('artists', [])
+        artist_name = artists[0]['name'] if artists else 'Unknown'
+
+        popular_part = find_popular(title, artist_name)
+
+        return jsonify({
+            "title": title,
+            "artist": artist_name,
+            "popular_part": popular_part
+        })  
+    except Exception as e:
+        return jsonify({"error": "Song recognition failed", "details": str(e)}), 500
+    

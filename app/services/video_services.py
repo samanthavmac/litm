@@ -5,7 +5,6 @@ from typing import Dict, Union
 from pathlib import Path
 import os
 from dotenv import load_dotenv
-import 
 load_dotenv()
 
 client = TwelveLabs

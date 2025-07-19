@@ -6,3 +6,4 @@ class Config:
     IG_ACCESS_TOKEN = os.environ.get('IG_ACCESS_TOKEN')
     ARC_KEY = os.environ.get('ARC_KEY')
     ARC_ACCESS_SECRET = os.environ.get('ARC_ACCESS_SECRET')
+    OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
