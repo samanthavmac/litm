@@ -6,7 +6,7 @@ import os
 def recognize_song(audio_file_path):
 
     config = {
-        'host': Config.ARC_HOST,
+        'host': "identify-us-west-2.acrcloud.com",
         'access_key': Config.ARC_KEY,
         'access_secret': Config.ARC_ACCESS_SECRET,
     }
@@ -23,3 +23,8 @@ def recognize_song(audio_file_path):
     os.remove(wav_path)
 
     return result
+
+
+def find_popular(song):
+
+    

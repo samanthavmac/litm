@@ -1,2 +1,3 @@
 acrcloud
 pydub
+twelvelabs 
