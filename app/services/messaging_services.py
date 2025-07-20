@@ -10,7 +10,7 @@ def send_message(song_options):
     formatted_string = format_string(song_options)
 
     client.messages.create(
-        to="16476133676",
+        to=Config.NUMBER,
         from_=Config.TWILIO_NUMBER,
         body=f"""Here are the songs we have detected: \n{formatted_string}\nPlease REPLY with the NUMBER corresponding to the song you'd like to post!"""
     )
@@ -22,7 +22,7 @@ def send_login_req_message():
     client = Client(account_sid, auth_token)
 
     client.messages.create(
-        to="16476133676",
+        to=Config.NUMBER,
         from_=Config.TWILIO_NUMBER,
         body=f"""Welcome to LIT(m)!!! Please REPLY with your instagram username to login"""
     )

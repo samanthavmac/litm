@@ -2,19 +2,18 @@ from flask import Blueprint, request, jsonify, Response
 from app.services.audio_services import recognize_song, find_popular
 from app.services.video_services import create_index, upload_local_video, extract_clip_from_local_video, extract_video_segments, get_client
 from app.services.messaging_services import send_message, send_login_req_message
+# from app.services.db_service import get_stories_by_session, get_user, create_user, verify_user
 from twilio.twiml.messaging_response import MessagingResponse
-from app.services.instagram_services import login_user, upload_story, create_highlight, add_to_highlight, upload_all_to_highlight
-
-from app.services.video_services import get_client
+from app.services.instagram_services import login_user, upload_story, create_highlight, add_to_highlight
+from app.services.instagram_services import upload_all_to_highlight
 import os
 from app.config import Config
 import time
 
 bp = Blueprint('main', __name__)
 user_song_options = {}
-ig_user = "" # "litmyay"
-ig_pass = "" # "litm123"
-current_session = ""
+ig_user = "litmyay"  # Fallback username
+ig_pass = "litm123"  # Fallback password
 
 @bp.route('/recognize_song', methods=['POST'])
 def recognize_song_route():
@@ -44,7 +43,7 @@ def recognize_song_route():
         upload_task = upload_local_video(video_path, index.id)
         
         # Store everything in user_song_options
-        phone_key = '16476133676'
+        phone_key = Config.NUMBER
         user_song_options[phone_key] = {
             'songs': results,
             'video_filename': video_filename,
@@ -242,6 +241,33 @@ def debug_config():
 #             "error": str(e)
 #         }), 500
 
+def ensure_instagram_login():
+    """Ensure Instagram is logged in, using fallback credentials if needed"""
+    global ig_user, ig_pass
+    
+    print("=== INSTAGRAM LOGIN FALLBACK DEBUG ===")
+    
+    # Check if we have valid credentials set via SMS
+    if ig_user and ig_pass and ig_user != "litmyay":
+        print(f"Using SMS-provided credentials for: {ig_user}")
+        try:
+            login_user(ig_user, ig_pass)
+            print("SMS credentials login successful")
+            return True
+        except Exception as e:
+            print(f"SMS credentials failed: {str(e)}")
+            # Fall through to fallback credentials
+    
+    # Use fallback credentials
+    print("Using fallback credentials")
+    try:
+        login_user("litmyay", "litm123")
+        print("Fallback credentials login successful")
+        return True
+    except Exception as e:
+        print(f"Fallback credentials also failed: {str(e)}")
+        return False
+
 @bp.route("/sms", methods=['POST'])
 def sms_reply():
     from_number = request.form.get('From')
@@ -314,6 +340,7 @@ def sms_reply():
                     resp.message(f"Failed to create highlight: {str(e)}")
         else:
             resp.message(f"do you want to reset credentials? Respond with !!! to reset")
+            # resp.message("Thanks! Now please REPLY with your Instagram password.")
 
     else:
         resp.message("Sorry, we couldn't find your songs list or your reply was invalid.")
@@ -429,19 +456,21 @@ def instagram_add_to_highlight():
 
 def extract_and_post_clip(song_title, lyrics, video_filename, index_id):
     """Extract video clip and post to Instagram"""
+    print(f"=== EXTRACT AND POST DEBUG ===")
+    print(f"Song title: {song_title}")
+    print(f"Lyrics: {lyrics}")
+    print(f"Video filename: {video_filename}")
+    print(f"Index ID: {index_id}")
+    
     try:
         video_path = os.path.join('temp_uploads', video_filename)
-        
-        # Wait until video is indexed 
-        
-        # client = get_client()
-        # index = client.index.get(index_id)
-        # while index.status != "ready":
-        #     time.sleep(1)
-        #     index = client.index.get(index_id)
+        print(f"Video path: {video_path}")
+        print(f"Video exists: {os.path.exists(video_path)}")
         
         # Get timestamps
+        print("Extracting clip timestamps...")
         clip_result = extract_clip_from_local_video(video_path, lyrics, index_id)
+        print(f"Clip result: {clip_result}")
         
         # If no matching clip found, create a random 5-second segment
         if not clip_result or not clip_result.get('best_match'):
@@ -486,25 +515,36 @@ def extract_and_post_clip(song_title, lyrics, video_filename, index_id):
                 return {"success": False, "error": "Could not determine video duration"}
         
         # Extract video
+        print("Extracting video segment...")
         extracted_files = extract_video_segments(video_path, [clip_result['best_match']])
+        print(f"Extracted files: {extracted_files}")
         
         if not extracted_files:
             return {"success": False, "error": "Failed to extract video"}
         
-        # Post to Instagram
+        # Post to Instagram with fallback login
         video_clip_path = extracted_files[0]['output_path']
-        print("logging in with ", ig_user, ig_pass)
-        login_user(ig_user, ig_pass)
-        print("logged in")
-        upload_story(ig_user, video_clip_path, f"{song_title}")
-        print("uploaded")
-
+        print(f"Video clip path: {video_clip_path}")
         
+        # Use the fallback login system
+        if not ensure_instagram_login():
+            return {"success": False, "error": "Instagram login failed with all credentials"}
+        
+        print("Uploading to Instagram story...")
+        # Always use the fallback username for upload since that's what we logged in with
+        upload_story("litmyay", video_clip_path, f"{song_title}")
+        print("Instagram upload successful")
+
         # Clean up the original video after successful extraction
         if os.path.exists(video_path):
             os.remove(video_path)
+            print("Cleaned up original video file")
         
+        print("=== END EXTRACT AND POST DEBUG ===")
         return {"success": True, "clip_path": video_clip_path}
         
     except Exception as e:
+        print(f"ERROR in extract_and_post_clip: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {"success": False, "error": str(e)}
