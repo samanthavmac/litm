@@ -33,8 +33,11 @@ def recognize_song_route():
     file.save(video_path)
 
     try:
+        print("TRYING")
+
         # Recognize songs from the video
         results = recognize_song(video_path)
+
         
         # Create a new index for this video
         index_name = f"index_{int(time.time())}"
