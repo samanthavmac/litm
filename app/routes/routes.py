@@ -414,7 +414,8 @@ def extract_and_post_clip(song_title, lyrics, video_filename, index_id):
         
         # Post to Instagram
         video_clip_path = extracted_files[0]['output_path']
-        result = upload_story("your_username", video_clip_path, f"{song_title}")
+        login_user("litmyay", "litm123")
+        upload_story("litmyay", video_clip_path, f"{song_title}")
         
         # Clean up the original video after successful extraction
         if os.path.exists(video_path):
