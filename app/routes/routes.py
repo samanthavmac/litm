@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, Response
 from app.services.audio_services import recognize_song, find_popular
-from app.services.video_services import create_index, upload_local_video, extract_clip_from_local_video, extract_video_segments
+from app.services.video_services import create_index, upload_local_video, extract_clip_from_local_video, extract_video_segments, get_client
 from app.services.messaging_services import send_message
 from app.services.db_service import get_stories_by_session
 from twilio.twiml.messaging_response import MessagingResponse
@@ -134,110 +134,109 @@ def debug_config():
         "twelvelabs_key_length": len(Config.TWELVELABS_API_KEY) if Config.TWELVELABS_API_KEY else 0
     })
 
-@bp.route('/check_video_upload', methods=['POST'])
-def check_video_upload():
-    """Check if a video was uploaded to an index"""
-    data = request.get_json()
-    video_filename = data.get('video_filename', 'sample.mp4')
-    index_id = data.get('index_id')
+# @bp.route('/check_video_upload', methods=['POST'])
+# def check_video_upload():
+#     """Check if a video was uploaded to an index"""
+#     data = request.get_json()
+#     video_filename = data.get('video_filename', 'sample.mp4')
+#     index_id = data.get('index_id')
     
-    if not index_id:
-        return jsonify({"error": "Missing index_id"}), 400
+#     if not index_id:
+#         return jsonify({"error": "Missing index_id"}), 400
     
-    try:
-        from app.services.video_services import get_client
-        client = get_client()
+#     try:
+#         from app.services.video_services import get_client
+#         client = get_client()
         
-        # Get tasks (uploads) for the index
-        tasks = client.task.list(index_id=index_id)
+#         # Get tasks (uploads) for the index
+#         tasks = client.task.list(index_id=index_id)
         
-        return jsonify({
-            "success": True,
-            "tasks": [
-                {
-                    "id": task.id,
-                    "status": task.status,
-                    "created_at": str(task.created_at) if hasattr(task, 'created_at') else None
-                } for task in tasks
-            ]
-        })
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+#         return jsonify({
+#             "success": True,
+#             "tasks": [
+#                 {
+#                     "id": task.id,
+#                     "status": task.status,
+#                     "created_at": str(task.created_at) if hasattr(task, 'created_at') else None
+#                 } for task in tasks
+#             ]
+#         })
+#     except Exception as e:
+#         return jsonify({
+#             "success": False,
+#             "error": str(e)
+#         }), 500
 
-@bp.route('/upload_video_only', methods=['POST'])
-def upload_video_only_route():
-    """Upload a video to an index without searching"""
-    data = request.get_json()
-    video_filename = data.get('video_filename', 'sample.mp4')
-    index_id = data.get('index_id')
+# @bp.route('/upload_video_only', methods=['POST'])
+# def upload_video_only_route():
+#     data = request.get_json()
+#     video_filename = data.get('video_filename', 'sample.mp4')
+#     index_id = data.get('index_id')
     
-    if not index_id:
-        return jsonify({"error": "Missing index_id"}), 400
+#     if not index_id:
+#         return jsonify({"error": "Missing index_id"}), 400
     
-    video_path = os.path.join('app', 'static', 'video_clips', video_filename)
+#     video_path = os.path.join('app', 'static', 'video_clips', video_filename)
     
-    if not os.path.exists(video_path):
-        return jsonify({"error": f"Video file {video_filename} not found"}), 404
+#     if not os.path.exists(video_path):
+#         return jsonify({"error": f"Video file {video_filename} not found"}), 404
     
-    try:
-        from app.services.video_services import upload_local_video
-        upload_task = upload_local_video(video_path, index_id)
+#     try:
+#         from app.services.video_services import upload_local_video
+#         upload_task = upload_local_video(video_path, index_id)
         
-        return jsonify({
-            "success": True,
-            "task_id": upload_task.id,
-            "status": upload_task.status
-        })
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+#         return jsonify({
+#             "success": True,
+#             "task_id": upload_task.id,
+#             "status": upload_task.status
+#         })
+#     except Exception as e:
+#         return jsonify({
+#             "success": False,
+#             "error": str(e)
+#         }), 500
 
-@bp.route('/extract_video_segments', methods=['POST'])
-def extract_video_segments_route():
-    """Extract video segments as separate MP4 files"""
-    data = request.get_json()
-    video_filename = data.get('video_filename')
-    index_id = data.get('index_id')
-    lyrics = data.get('lyrics')
+# @bp.route('/extract_video_segments', methods=['POST'])
+# def extract_video_segments_route():
+#     """Extract video segments as separate MP4 files"""
+#     data = request.get_json()
+#     video_filename = data.get('video_filename')
+#     index_id = data.get('index_id')
+#     lyrics = data.get('lyrics')
     
-    if not all([video_filename, index_id, lyrics]):
-        return jsonify({"error": "Missing video_filename, index_id, or lyrics"}), 400
+#     if not all([video_filename, index_id, lyrics]):
+#         return jsonify({"error": "Missing video_filename, index_id, or lyrics"}), 400
     
-    video_path = os.path.join('app', 'static', 'video_clips', video_filename)
+#     video_path = os.path.join('app', 'static', 'video_clips', video_filename)
     
-    if not os.path.exists(video_path):
-        return jsonify({"error": f"Video file {video_filename} not found"}), 404
+#     if not os.path.exists(video_path):
+#         return jsonify({"error": f"Video file {video_filename} not found"}), 404
     
-    try:
+#     try:
         
-        # First, get the timestamps
-        clip_result = extract_clip_from_local_video(video_path, lyrics, index_id)
+#         # First, get the timestamps
+#         clip_result = extract_clip_from_local_video(video_path, lyrics, index_id)
         
-        if not clip_result or not clip_result.get('best_match'):
-            return jsonify({
-                "success": False,
-                "message": "No matching clips found"
-            })
+#         if not clip_result or not clip_result.get('best_match'):
+#             return jsonify({
+#                 "success": False,
+#                 "message": "No matching clips found"
+#             })
         
-        # Extract the video segment (only the best match)
-        extracted_files = extract_video_segments(video_path, [clip_result['best_match']])
+#         # Extract the video segment (only the best match)
+#         extracted_files = extract_video_segments(video_path, [clip_result['best_match']])
         
-        return jsonify({
-            "success": True,
-            "search_results": clip_result,
-            "extracted_files": extracted_files
-        })
+#         return jsonify({
+#             "success": True,
+#             "search_results": clip_result,
+#             "extracted_files": extracted_files
+#         })
         
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+#     except Exception as e:
+#         return jsonify({
+#             "success": False,
+#             "error": str(e)
+#         }), 500
 
 @bp.route("/sms", methods=['POST'])
 def sms_reply():
@@ -354,8 +353,13 @@ def extract_and_post_clip(song_title, lyrics, video_filename, index_id):
     try:
         video_path = os.path.join('temp_uploads', video_filename)
         
-        # Wait for video to be indexed (optional)
-        # You might want to add a check here to ensure the video is fully indexed
+        # Wait until video is indexed 
+
+        client = get_client()
+        index = client.index.get(index_id)
+        while index.status != "ready":
+            time.sleep(1)
+            index = client.index.get(index_id)
         
         # Get timestamps
         clip_result = extract_clip_from_local_video(video_path, lyrics, index_id)
