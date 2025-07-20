@@ -2,13 +2,12 @@ from flask import Blueprint, request, jsonify, Response
 from app.services.audio_services import recognize_song, find_popular
 from app.services.video_services import extract_clip_from_local_video
 from app.services.messaging_services import send_message
+from app.services import instagram_services as ig_service
 from twilio.twiml.messaging_response import MessagingResponse
 from app.services.instagram_services import login_user, upload_story, create_highlight, add_to_highlight
 
-
 import os
 from app.config import Config
-from app.services import instagram_services as ig_service
 
 bp = Blueprint('main', __name__)
 user_song_options = {}
