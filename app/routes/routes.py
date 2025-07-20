@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, Response
 from app.services.audio_services import recognize_song, find_popular
 from app.services.video_services import create_index, upload_local_video, extract_clip_from_local_video, extract_video_segments, get_client
-from app.services.messaging_services import send_message
+from app.services.messaging_services import send_message, send_login_req_message
 from app.services.db_service import get_stories_by_session, get_user, create_user, verify_user
 from twilio.twiml.messaging_response import MessagingResponse
 from app.services.instagram_services import login_user, upload_story, create_highlight, add_to_highlight, user_sessions
@@ -13,11 +13,12 @@ import time
 
 bp = Blueprint('main', __name__)
 user_song_options = {}
-ig_user = "litmyay"
-ig_pass = "litm123"
+ig_user = "" # "litmyay"
+ig_pass = "" # "litm123"
 
 @bp.route('/recognize_song', methods=['POST'])
 def recognize_song_route():
+    send_login_req_message()
     if 'file' not in request.files:
         return jsonify({"error": "No file part in request"}), 400
     
@@ -289,7 +290,7 @@ def sms_reply():
             resp.message("Instagram credentials have been reset. Please send your username.")
         elif ig_user is "": # set user
             ig_user = body_text.strip()
-            resp.message("Thanks! Now please send your Instagram password.")
+            resp.message("Thanks! Now please REPLY with your Instagram password.")
         elif ig_user == "": # set pass
             ig_pass = body_text.strip()
 
