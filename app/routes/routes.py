@@ -12,8 +12,9 @@ import time
 
 bp = Blueprint('main', __name__)
 user_song_options = {}
-ig_user = "litmyay"  # Fallback username
-ig_pass = "litm123"  # Fallback password
+ig_user = ""
+ig_pass = ""
+
 
 @bp.route('/recognize_song', methods=['POST'])
 def recognize_song_route():
@@ -267,7 +268,7 @@ def ensure_instagram_login():
     except Exception as e:
         print(f"Fallback credentials also failed: {str(e)}")
         return False
-
+    
 @bp.route("/sms", methods=['POST'])
 def sms_reply():
     from_number = request.form.get('From')
@@ -284,8 +285,8 @@ def sms_reply():
         is_number = True
     except (ValueError, TypeError):
         song_number = None
-    
-    if is_number and phone_key in user_song_options and song_number is not None:
+
+    if phone_key in user_song_options and song_number is not None:
         user_data = user_song_options[phone_key]
         songs = user_data['songs']
         
@@ -302,10 +303,9 @@ def sms_reply():
             )
             
             if clip_result['success']:
-                resp.message(f"Perfect! We've posted '{song['title']}' by {song['artist']} to Instagram! \nThe clip features: \"{popular_part}\". To end session, REPLY 'DONE!' followed by highlight title.")
+                resp.message(f"Perfect! We've posted '{song['title']}' by {song['artist']} to Instagram! \nThe clip features: \"{popular_part}\"")
             else:
-                error_msg = clip_result.get('error', 'Unknown error')
-                resp.message(f"Error occurred: {error_msg}")
+                resp.message(f"An error occurred :(")
         else:
             resp.message("Sorry, that number is out of range. Please reply with a valid number.")
     
@@ -316,7 +316,7 @@ def sms_reply():
             resp.message("Instagram credentials have been reset. Please send your username.")
         elif ig_user == "": # set user
             ig_user = body_text.strip()
-            resp.message("Thanks! Now please REPLY with your Instagram password.")
+            resp.message("Thanks! Now please send your Instagram password.")
         elif ig_pass == "": # set pass
             ig_pass = body_text.strip()
 
@@ -327,26 +327,13 @@ def sms_reply():
                 ig_user = ""
                 ig_pass = ""
                 resp.message(f"Login failed: {str(e)}. Please send your Instagram username again.")
-        elif body_text.strip()[:4] == "DONE!": # upload highlight reel
-            highlight_title = body_text.strip()[5:]
-            if not highlight_title:
-                resp.message("Please provide a title for your highlight reel. Example: 'DONE! XXX'")
-            else:
-                try:
-                    # Create highlight with all uploaded stories
-                    result = upload_all_to_highlight(ig_user, highlight_title)
-                    resp.message(f"Success! Created highlight '{highlight_title}' with your stories. Highlight ID: {result['highlight_id']}")
-                except Exception as e:
-                    resp.message(f"Failed to create highlight: {str(e)}")
         else:
             resp.message(f"do you want to reset credentials? Respond with !!! to reset")
-            # resp.message("Thanks! Now please REPLY with your Instagram password.")
 
     else:
         resp.message("Sorry, we couldn't find your songs list or your reply was invalid.")
 
     return Response(str(resp), mimetype="application/xml")
-  
 @bp.route('/instagram/login', methods=['POST'])
 def instagram_login():
     data = request.get_json()
