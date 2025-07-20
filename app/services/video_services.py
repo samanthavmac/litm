@@ -44,7 +44,7 @@ def search_video_by_text(query: str, index_id: str):
         search_results = client.search.query(
             index_id=index_id,
             query_text=query,
-            options=["visual", "audio"]
+            options=["audio"]  # Only use audio since that's what the index supports
         )
         print(f"Raw search results: {search_results}")
         return search_results
@@ -137,13 +137,16 @@ def extract_video_segments(video_path: str, matches: list):
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
         try:
-            # Use ffmpeg to extract the segment
+            # Use ffmpeg to extract the segment with audio
             cmd = [
                 'ffmpeg',
                 '-i', video_path,
                 '-ss', str(start_time),
                 '-t', str(duration),
-                '-c', 'copy',  # Copy without re-encoding (faster)
+                '-c:v', 'libx264',  # Re-encode video for better compatibility
+                '-c:a', 'aac',      # Re-encode audio to AAC
+                '-preset', 'fast',   # Faster encoding
+                '-crf', '23',        # Good quality
                 '-y',  # Overwrite output file
                 output_path
             ]
@@ -169,5 +172,3 @@ def extract_video_segments(video_path: str, matches: list):
             print(f"Error extracting clip {match_number}: {e}")
     
     return extracted_files
-
-

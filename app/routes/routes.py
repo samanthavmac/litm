@@ -2,11 +2,11 @@ from flask import Blueprint, request, jsonify, Response
 from app.services.audio_services import recognize_song, find_popular
 from app.services.video_services import create_index, upload_local_video, extract_clip_from_local_video, extract_video_segments, get_client
 from app.services.messaging_services import send_message, send_login_req_message
-from app.services.db_service import get_stories_by_session, get_user, create_user, verify_user
+# from app.services.db_service import get_stories_by_session, get_user, create_user, verify_user
 from twilio.twiml.messaging_response import MessagingResponse
-from app.services.instagram_services import login_user, upload_story, create_highlight, add_to_highlight, user_sessions
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from app.services.instagram_services import login_user, upload_story, create_highlight, add_to_highlight, upload_all_to_highlight
 
+from app.services.video_services import get_client
 import os
 from app.config import Config
 import time
@@ -15,6 +15,7 @@ bp = Blueprint('main', __name__)
 user_song_options = {}
 ig_user = "" # "litmyay"
 ig_pass = "" # "litm123"
+current_session = ""
 
 @bp.route('/recognize_song', methods=['POST'])
 def recognize_song_route():
@@ -44,7 +45,7 @@ def recognize_song_route():
         upload_task = upload_local_video(video_path, index.id)
         
         # Store everything in user_song_options
-        phone_key = '16474795038'
+        phone_key = '16476133676'
         user_song_options[phone_key] = {
             'songs': results,
             'video_filename': video_filename,
@@ -109,27 +110,26 @@ def extract_lyrics_clip_route():
         }), 500
 
 
-@bp.route('/list_indexes', methods=['GET'])
-def list_indexes_route():
-    """List all existing TwelveLabs indexes"""
-    try:
-        from app.services.video_services import get_client
-        client = get_client()
-        indexes = client.index.list()
-        return jsonify({
-            "success": True,
-            "indexes": [
-                {
-                    "id": index.id,
-                    "name": index.name
-                } for index in indexes
-            ]
-        })
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+# @bp.route('/list_indexes', methods=['GET'])
+# def list_indexes_route():
+#     """List all existing TwelveLabs indexes"""
+#     try:
+#         client = get_client()
+#         indexes = client.index.list()
+#         return jsonify({
+#             "success": True,
+#             "indexes": [
+#                 {
+#                     "id": index.id,
+#                     "name": index.name
+#                 } for index in indexes
+#             ]
+#         })
+#     except Exception as e:
+#         return jsonify({
+#             "success": False,
+#             "error": str(e)
+#         }), 500
 
 @bp.route('/debug_config', methods=['GET'])
 def debug_config():
@@ -259,7 +259,7 @@ def sms_reply():
         is_number = True
     except (ValueError, TypeError):
         song_number = None
-
+    
     if is_number and phone_key in user_song_options and song_number is not None:
         user_data = user_song_options[phone_key]
         songs = user_data['songs']
@@ -277,9 +277,10 @@ def sms_reply():
             )
             
             if clip_result['success']:
-                resp.message(f"Perfect! We've posted '{song['title']}' by {song['artist']} to Instagram! \nThe clip features: \"{popular_part}\"")
+                resp.message(f"Perfect! We've posted '{song['title']}' by {song['artist']} to Instagram! \nThe clip features: \"{popular_part}\". To end session, REPLY 'DONE!' followed by highlight title.")
             else:
-                resp.message(f"An error occurred :(")
+                error_msg = clip_result.get('error', 'Unknown error')
+                resp.message(f"Error occurred: {error_msg}")
         else:
             resp.message("Sorry, that number is out of range. Please reply with a valid number.")
     
@@ -288,10 +289,10 @@ def sms_reply():
             ig_user = ""
             ig_pass = ""
             resp.message("Instagram credentials have been reset. Please send your username.")
-        elif ig_user is "": # set user
+        elif ig_user == "": # set user
             ig_user = body_text.strip()
             resp.message("Thanks! Now please REPLY with your Instagram password.")
-        elif ig_user == "": # set pass
+        elif ig_pass == "": # set pass
             ig_pass = body_text.strip()
 
             try: # attempt login
@@ -301,6 +302,17 @@ def sms_reply():
                 ig_user = ""
                 ig_pass = ""
                 resp.message(f"Login failed: {str(e)}. Please send your Instagram username again.")
+        elif body_text.strip()[:4] == "DONE!": # upload highlight reel
+            highlight_title = body_text.strip()[5:]
+            if not highlight_title:
+                resp.message("Please provide a title for your highlight reel. Example: 'DONE! XXX'")
+            else:
+                try:
+                    # Create highlight with all uploaded stories
+                    result = upload_all_to_highlight(ig_user, highlight_title)
+                    resp.message(f"Success! Created highlight '{highlight_title}' with your stories. Highlight ID: {result['highlight_id']}")
+                except Exception as e:
+                    resp.message(f"Failed to create highlight: {str(e)}")
         else:
             resp.message(f"do you want to reset credentials? Respond with !!! to reset")
 
@@ -359,61 +371,62 @@ def instagram_add_to_highlight():
         data['story_media_ids']
     ))
 
-@bp.route('/instagram/create_concert_highlight', methods=['POST'])
-def create_concert_highlight():
-    data = request.get_json()
-    username = data.get('username')
-    concert_session_id = data.get('concert_session_id')
-    title = data.get('title')
+# @bp.route('/instagram/create_concert_highlight', methods=['POST'])
+# def create_concert_highlight():
+#     data = request.get_json()
+#     username = data.get('username')
+#     concert_session_id = data.get('concert_session_id')
+#     title = data.get('title')
 
-    try:
-        stories = get_stories_by_session(concert_session_id)
-        media_ids = [story['media_id'] for story in stories]
+#     try:
+#         # stories = get_stories_by_session(concert_session_id)
+#         # media_ids = [story['media_id'] for story in stories]
+#         media_ids = []  # Placeholder since db_service is commented out
 
-        if not media_ids:
-            return jsonify({"error": "No stories found for this session."}), 400
+#         if not media_ids:
+#             return jsonify({"error": "No stories found for this session."}), 400
 
-        highlight = create_highlight(username, title, media_ids)
-        return jsonify({"status": "highlight_created", "highlight_id": highlight.pk})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+#         highlight = create_highlight(username, title, media_ids)
+#         return jsonify({"status": "highlight_created", "highlight_id": highlight.pk})
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 400
     
-@bp.route('/user/register', methods=['POST'])
-def register_user():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-    phone_number = data.get('phone_number')
+# @bp.route('/user/register', methods=['POST'])
+# def register_user():
+#     data = request.get_json()
+#     username = data.get('username')
+#     password = data.get('password')
+#     phone_number = data.get('phone_number')
 
-    if not all([username, password, phone_number]):
-        return jsonify({"error": "Missing required fields"}), 400
+#     if not all([username, password, phone_number]):
+#         return jsonify({"error": "Missing required fields"}), 400
 
-    if get_user(username):
-        return jsonify({"error": "User already exists"}), 400
+#     if get_user(username):
+#         return jsonify({"error": "User already exists"}), 400
 
-    create_user(username, password, phone_number)
-    return jsonify({"status": "User registered successfully"})
+#     create_user(username, password, phone_number)
+#     return jsonify({"status": "User registered successfully"})
 
-@bp.route('/user/login', methods=['POST'])
-def user_login():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
+# @bp.route('/user/login', methods=['POST'])
+# def user_login():
+#     data = request.get_json()
+#     username = data.get('username')
+#     password = data.get('password')
 
-    user = verify_user(username, password)
-    if not user:
-        return jsonify({"error": "Invalid username or password"}), 401
+#     user = verify_user(username, password)
+#     if not user:
+#         return jsonify({"error": "Invalid username or password"}), 401
 
-    access_token = create_access_token(identity=username)
-    return jsonify({"access_token": access_token})
+#     access_token = create_access_token(identity=username)
+#     return jsonify({"access_token": access_token})
 
-@bp.route('/user/logout', methods=['POST'])
-@jwt_required()
-def user_logout():
-    username = get_jwt_identity()
-    if username in user_sessions:
-        del user_sessions[username]
-    return jsonify({"status": "logged_out", "username": username})
+# @bp.route('/user/logout', methods=['POST'])
+# @jwt_required()
+# def user_logout():
+#     username = get_jwt_identity()
+#     if username in user_sessions:
+#         del user_sessions[username]
+#     return jsonify({"status": "logged_out", "username": username})
 
 def extract_and_post_clip(song_title, lyrics, video_filename, index_id):
     """Extract video clip and post to Instagram"""
@@ -421,18 +434,57 @@ def extract_and_post_clip(song_title, lyrics, video_filename, index_id):
         video_path = os.path.join('temp_uploads', video_filename)
         
         # Wait until video is indexed 
-
-        client = get_client()
-        index = client.index.get(index_id)
-        while index.status != "ready":
-            time.sleep(1)
-            index = client.index.get(index_id)
+        
+        # client = get_client()
+        # index = client.index.get(index_id)
+        # while index.status != "ready":
+        #     time.sleep(1)
+        #     index = client.index.get(index_id)
         
         # Get timestamps
         clip_result = extract_clip_from_local_video(video_path, lyrics, index_id)
         
+        # If no matching clip found, create a random 5-second segment
         if not clip_result or not clip_result.get('best_match'):
-            return {"success": False, "error": "No matching clip found"}
+            print("No matching clip found, creating random 5-second segment")
+            
+            import subprocess
+            import re
+
+            cmd = [
+                'ffmpeg', '-i', video_path, 
+                '-f', 'null', '-'
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            duration_match = re.search(r'Duration: (\d{2}):(\d{2}):(\d{2})', result.stderr)
+            if duration_match:
+                hours, minutes, seconds = map(int, duration_match.groups())
+                total_duration = hours * 3600 + minutes * 60 + seconds
+                
+                # Create a random 5-second segment (avoiding the very end)
+                import random
+                max_start_time = max(0, total_duration - 5)
+                start_time = random.uniform(0, max_start_time)
+                
+                fallback_match = {
+                    'start_time': start_time,
+                    'end_time': start_time + 5,
+                    'duration': 5,
+                    'match_number': 1,
+                    'score': 0.0,
+                    'confidence': 0.0
+                }
+                
+                clip_result = {
+                    'best_match': fallback_match,
+                    'search_query': lyrics,
+                    'video_path': video_path,
+                    'total_matches_found': 0,
+                    'is_fallback': True
+                }
+            else:
+                return {"success": False, "error": "Could not determine video duration"}
         
         # Extract video
         extracted_files = extract_video_segments(video_path, [clip_result['best_match']])
@@ -442,8 +494,12 @@ def extract_and_post_clip(song_title, lyrics, video_filename, index_id):
         
         # Post to Instagram
         video_clip_path = extracted_files[0]['output_path']
+        print("logging in with ", ig_user, ig_pass)
         login_user(ig_user, ig_pass)
+        print("logged in")
         upload_story(ig_user, video_clip_path, f"{song_title}")
+        print("uploaded")
+
         
         # Clean up the original video after successful extraction
         if os.path.exists(video_path):
