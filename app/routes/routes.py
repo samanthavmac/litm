@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, Response
 from app.services.audio_services import recognize_song, find_popular
 from app.services.video_services import extract_clip_from_local_video
 from app.services.messaging_services import send_message
-from app.services import instagram_services as ig_service
+from app.services.db_service import get_stories_by_session
 from twilio.twiml.messaging_response import MessagingResponse
 from app.services.instagram_services import login_user, upload_story, create_highlight, add_to_highlight
 
@@ -238,7 +238,6 @@ def extract_video_segments_route():
             "error": str(e)
         }), 500
 
-
 @bp.route("/sms", methods=['POST'])
 def sms_reply():
     from_number = request.form.get('From')
@@ -315,3 +314,22 @@ def instagram_add_to_highlight():
         data['highlight_id'],
         data['story_media_ids']
     ))
+
+@bp.route('/instagram/create_concert_highlight', methods=['POST'])
+def create_concert_highlight():
+    data = request.get_json()
+    username = data.get('username')
+    concert_session_id = data.get('concert_session_id')
+    title = data.get('title')
+
+    try:
+        stories = get_stories_by_session(concert_session_id)
+        media_ids = [story['media_id'] for story in stories]
+
+        if not media_ids:
+            return jsonify({"error": "No stories found for this session."}), 400
+
+        highlight = create_highlight(username, title, media_ids)
+        return jsonify({"status": "highlight_created", "highlight_id": highlight.pk})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
