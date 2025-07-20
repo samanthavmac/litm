@@ -1,7 +1,6 @@
 from flask import Flask
 from flask_cors import CORS
 from app.routes.routes import bp as main_bp
-
 from dotenv import load_dotenv
 
 def create_app():
