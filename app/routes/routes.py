@@ -13,6 +13,8 @@ import time
 
 bp = Blueprint('main', __name__)
 user_song_options = {}
+ig_user = "litmyay"
+ig_pass = "litm123"
 
 @bp.route('/recognize_song', methods=['POST'])
 def recognize_song_route():
@@ -243,18 +245,21 @@ def debug_config():
 @bp.route("/sms", methods=['POST'])
 def sms_reply():
     from_number = request.form.get('From')
-    song_number_str = request.form.get('Body')
+    body_text = request.form.get('Body')
 
     phone_key = from_number.lstrip('+')
+    resp = MessagingResponse()
 
+    global ig_user, ig_pass 
+    
+    is_number = False
     try:
-        song_number = int(song_number_str)
+        song_number = int(body_text)
+        is_number = True
     except (ValueError, TypeError):
         song_number = None
 
-    resp = MessagingResponse()
-
-    if phone_key in user_song_options and song_number is not None:
+    if is_number and phone_key in user_song_options and song_number is not None:
         user_data = user_song_options[phone_key]
         songs = user_data['songs']
         
@@ -273,9 +278,31 @@ def sms_reply():
             if clip_result['success']:
                 resp.message(f"Perfect! We've posted '{song['title']}' by {song['artist']} to Instagram! \nThe clip features: \"{popular_part}\"")
             else:
-                resp.message(f"an error occurred :(")
+                resp.message(f"An error occurred :(")
         else:
             resp.message("Sorry, that number is out of range. Please reply with a valid number.")
+    
+    elif not is_number:
+        if body_text.strip() == "!!!": # reset credentials request
+            ig_user = ""
+            ig_pass = ""
+            resp.message("Instagram credentials have been reset. Please send your username.")
+        elif ig_user is "": # set user
+            ig_user = body_text.strip()
+            resp.message("Thanks! Now please send your Instagram password.")
+        elif ig_user == "": # set pass
+            ig_pass = body_text.strip()
+
+            try: # attempt login
+                login_user(ig_user, ig_pass)
+                resp.message(f"Thank you! Your Instagram credentials for {ig_user} have been saved. You can now upload a video to recognize songs.")
+            except Exception as e:
+                ig_user = ""
+                ig_pass = ""
+                resp.message(f"Login failed: {str(e)}. Please send your Instagram username again.")
+        else:
+            resp.message(f"do you want to reset credentials? Respond with !!! to reset")
+
     else:
         resp.message("Sorry, we couldn't find your songs list or your reply was invalid.")
 
@@ -414,8 +441,8 @@ def extract_and_post_clip(song_title, lyrics, video_filename, index_id):
         
         # Post to Instagram
         video_clip_path = extracted_files[0]['output_path']
-        login_user("litmyay", "litm123")
-        upload_story("litmyay", video_clip_path, f"{song_title}")
+        login_user(ig_user, ig_pass)
+        upload_story(ig_user, video_clip_path, f"{song_title}")
         
         # Clean up the original video after successful extraction
         if os.path.exists(video_path):
