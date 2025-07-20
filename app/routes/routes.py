@@ -8,7 +8,6 @@ from app.services.instagram_services import login_user, upload_story, create_hig
 
 import os
 from app.config import Config
-from app.services import instagram_services as ig_service
 
 bp = Blueprint('main', __name__)
 user_song_options = {}
