@@ -5,7 +5,7 @@
 1. **Clone the repository**
 
 ```bash
-git clone https://github.com/your-username/litm.git
+git clone https://github.com/samanthavmac/litm.git
 cd litm
 ```
 
