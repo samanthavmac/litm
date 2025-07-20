@@ -1,20 +1,19 @@
 from flask import Blueprint, request, jsonify, Response
 from app.services.audio_services import recognize_song, find_popular
-from app.services.video_services import extract_clip_from_local_video
+from app.services.video_services import create_index, upload_local_video, extract_clip_from_local_video, extract_video_segments
 from app.services.messaging_services import send_message
 from app.services.db_service import get_stories_by_session
 from twilio.twiml.messaging_response import MessagingResponse
 from app.services.instagram_services import login_user, upload_story, create_highlight, add_to_highlight
-
 import os
 from app.config import Config
+import time
 
 bp = Blueprint('main', __name__)
 user_song_options = {}
 
 @bp.route('/recognize_song', methods=['POST'])
 def recognize_song_route():
-
     if 'file' not in request.files:
         return jsonify({"error": "No file part in request"}), 400
     
@@ -22,21 +21,43 @@ def recognize_song_route():
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
 
-    save_path = os.path.join('temp_uploads', file.filename)
+    # Save video to temp_uploads
+    video_filename = f"upload_{int(time.time())}_{file.filename}"
+    video_path = os.path.join('temp_uploads', video_filename)
     os.makedirs('temp_uploads', exist_ok=True)
-    file.save(save_path)
+    file.save(video_path)
 
     try:
-        results = recognize_song(save_path)
-    finally:
-        os.remove(save_path)
-
-    try:
+        # Recognize songs from the video
+        results = recognize_song(video_path)
+        
+        # Create a new index for this video
+        index_name = f"index_{int(time.time())}"
+        index = create_index(index_name)
+        
+        # Upload video to the new index
+        upload_task = upload_local_video(video_path, index.id)
+        
+        # Store everything in user_song_options
         phone_key = '16474795038'
-        user_song_options[phone_key] = results
+        user_song_options[phone_key] = {
+            'songs': results,
+            'video_filename': video_filename,
+            'index_id': index.id,
+            'upload_task_id': upload_task.id
+        }
+        
         send_message(results)
-        return jsonify({"status": "message sent"})
+        return jsonify({
+            "status": "message sent",
+            "video_filename": video_filename,
+            "index_id": index.id
+        })
+        
     except Exception as e:
+        # Clean up on error
+        if os.path.exists(video_path):
+            os.remove(video_path)
         return jsonify({"error": "Song recognition failed", "details": str(e)}), 500
 
 
@@ -212,7 +233,6 @@ def extract_video_segments_route():
         return jsonify({"error": f"Video file {video_filename} not found"}), 404
     
     try:
-        from app.services.video_services import extract_clip_from_local_video, extract_video_segments
         
         # First, get the timestamps
         clip_result = extract_clip_from_local_video(video_path, lyrics, index_id)
@@ -253,11 +273,25 @@ def sms_reply():
     resp = MessagingResponse()
 
     if phone_key in user_song_options and song_number is not None:
-        songs = user_song_options[phone_key]
+        user_data = user_song_options[phone_key]
+        songs = user_data['songs']
+        
         if 1 <= song_number <= len(songs):
             song = songs[song_number-1]
             popular_part = find_popular(song['title'], song['artist'])
-            resp.message(f"Sounds good! We'll be posting a video of '{song['title']}' by {song['artist']} soon! \nThe story will include the snippet with \"{popular_part}\"")
+            
+            # Use the stored video and index info
+            clip_result = extract_and_post_clip(
+                song['title'], 
+                popular_part,
+                user_data['video_filename'],
+                user_data['index_id']
+            )
+            
+            if clip_result['success']:
+                resp.message(f"Perfect! We've posted '{song['title']}' by {song['artist']} to Instagram! \nThe clip features: \"{popular_part}\"")
+            else:
+                resp.message(f"an error occurred :(")
         else:
             resp.message("Sorry, that number is out of range. Please reply with a valid number.")
     else:
@@ -333,3 +367,36 @@ def create_concert_highlight():
         return jsonify({"status": "highlight_created", "highlight_id": highlight.pk})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+def extract_and_post_clip(song_title, lyrics, video_filename, index_id):
+    """Extract video clip and post to Instagram"""
+    try:
+        video_path = os.path.join('temp_uploads', video_filename)
+        
+        # Wait for video to be indexed (optional)
+        # You might want to add a check here to ensure the video is fully indexed
+        
+        # Get timestamps
+        clip_result = extract_clip_from_local_video(video_path, lyrics, index_id)
+        
+        if not clip_result or not clip_result.get('best_match'):
+            return {"success": False, "error": "No matching clip found"}
+        
+        # Extract video
+        extracted_files = extract_video_segments(video_path, [clip_result['best_match']])
+        
+        if not extracted_files:
+            return {"success": False, "error": "Failed to extract video"}
+        
+        # Post to Instagram
+        video_clip_path = extracted_files[0]['output_path']
+        result = upload_story("your_username", video_clip_path, f"{song_title}")
+        
+        # Clean up the original video after successful extraction
+        if os.path.exists(video_path):
+            os.remove(video_path)
+        
+        return {"success": True, "clip_path": video_clip_path}
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
