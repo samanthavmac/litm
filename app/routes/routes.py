@@ -2,7 +2,6 @@ from flask import Blueprint, request, jsonify, Response
 from app.services.audio_services import recognize_song, find_popular
 from app.services.video_services import create_index, upload_local_video, extract_clip_from_local_video, extract_video_segments, get_client
 from app.services.messaging_services import send_message, send_login_req_message
-# from app.services.db_service import get_stories_by_session, get_user, create_user, verify_user
 from twilio.twiml.messaging_response import MessagingResponse
 from app.services.instagram_services import login_user, upload_story, create_highlight, add_to_highlight, upload_all_to_highlight
 
