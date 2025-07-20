@@ -43,7 +43,7 @@ def recognize_song_route():
         user_song_options[phone_key] = {
             'songs': results,
             'video_filename': video_filename,
-            'index_id': index.id,
+            'index_id': index.id,  # Pass the dynamic index ID
             'upload_task_id': upload_task.id
         }
         
@@ -51,7 +51,7 @@ def recognize_song_route():
         return jsonify({
             "status": "message sent",
             "video_filename": video_filename,
-            "index_id": index.id
+            "index_id": index.id  # Return the dynamic index ID
         })
         
     except Exception as e:
@@ -103,25 +103,6 @@ def extract_lyrics_clip_route():
             "error": str(e)
         }), 500
 
-@bp.route('/create_index', methods=['POST'])
-def create_index_route():
-    """Create a new TwelveLabs index"""
-    data = request.get_json()
-    name = data.get('name', 'my_video_index')
-    
-    try:
-        from app.services.video_services import create_index
-        index = create_index(name)
-        return jsonify({
-            "success": True,
-            "index_id": index.id,
-            "index_name": index.name
-        })
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
 
 @bp.route('/list_indexes', methods=['GET'])
 def list_indexes_route():
