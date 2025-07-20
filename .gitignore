@@ -20,4 +20,9 @@ tmp/*
 .DS_Store
 
 .env
+
+app/static/video_clips/
+app/static/extracted_clips/
+app/static/video_clips/audio/
+
 venv
