@@ -1,120 +1,84 @@
 from instagrapi import Client
 from instagrapi.types import StoryMention, StoryMedia, StoryLink, StoryHashtag
+from app.services.db_service import get_user, update_instagram_session, save_story
 import os
+import boto3
 
 # temp: in-memory session store (add db later)
 user_sessions = {}
 
-def login_user(username, password, verification_code=None):
+# Initialize S3 client
+s3 = boto3.client('s3')
+
+def load_or_login_user(username):
+    user = get_user(username)
+    if not user:
+        raise Exception("User not registered")
+
     cl = Client()
-    if os.path.exists(f'sessions/{username}.json'):
-        cl.load_settings(f'sessions/{username}.json')
-        cl.login(username, password)  # uses session, avoids 2FA
-    else:
-        cl.login(username, password, verification_code=verification_code)
-    os.makedirs('sessions', exist_ok=True)
-    cl.dump_settings(f'sessions/{username}.json')
+
+    if user.get('instagram_session'):
+        try:
+            cl.set_settings(user['instagram_session'])
+            cl.login(user['instagram_username'], user['ig_password'])
+            user_sessions[username] = cl
+            return cl
+        except Exception:
+            pass  # Fall back to fresh login
+
+    # Fresh login with IG credentials
+    cl.login(user['instagram_username'], user['ig_password'])
     user_sessions[username] = cl
-    return {"status": "logged_in", "username": username}
+    # Save session to DB for reuse
+    update_instagram_session(username, cl.get_settings())
+    return cl
 
 def is_user_logged_in(username):
     return username in user_sessions
 
 # no video extra sorry :'(
-def upload_story(username, video_path, caption=""):
-    if username not in user_sessions:
-        raise Exception("User not logged in")
+def upload_story(username, s3_key, caption=""):
+    cl = user_sessions.get(username) or load_or_login_user(username)
 
-    cl = user_sessions[username]
-
-    full_path = os.path.abspath(video_path)
-    if not os.path.exists(full_path):
-        raise Exception(f"Video file not found: {full_path}")
+    # Download the video from S3
+    bucket_name = os.getenv('AWS_S3_BUCKET_NAME')
+    local_video_path = os.path.join('temp_uploads', os.path.basename(s3_key))
+    os.makedirs('temp_uploads', exist_ok=True)
 
     try:
-        media = cl.video_upload_to_story(full_path, caption)
+        s3.download_file(bucket_name, s3_key, local_video_path)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        raise Exception(f"Failed to download video from S3: {str(e)}")
+
+    try:
+        media = cl.video_upload_to_story(local_video_path, caption)
+        # Save the media_id in the database
+        save_story(concert_session_id=None, username=username, media_id=media.pk)
+    except Exception as e:
         raise Exception(f"Story upload failed: {str(e)}")
+    finally:
+        # Clean up the local file
+        if os.path.exists(local_video_path):
+            os.remove(local_video_path)
 
     return {"status": "uploaded", "media_id": media.pk}
 
-# def upload_story(username, video_path, caption="", mention=None, link=None, hashtag=None, media=None):
-#     if username not in user_sessions:
-#         raise Exception("User not logged in")
-#     cl = user_sessions[username]
-
-#     full_path = os.path.abspath(video_path)
-#     if not os.path.exists(full_path):
-#         raise Exception(f"Video file not found: {full_path}")
-
-#     story_mention = None
-#     if mention:
-#         user_info = cl.user_info_by_username(mention['username'])
-#         story_mention = StoryMention(
-#             user=user_info,
-#             x=mention['x'],
-#             y=mention['y'],
-#             width=mention['width'],
-#             height=mention['height']
-#         )
-
-#     story_link = None
-#     if link:
-#         story_link = StoryLink(**link)
-
-#     story_hashtag = None
-#     if hashtag:
-#         ht_info = cl.hashtag_info(hashtag['name'])
-#         story_hashtag = StoryHashtag(
-#             hashtag=ht_info,
-#             x=hashtag['x'],
-#             y=hashtag['y'],
-#             width=hashtag['width'],
-#             height=hashtag['height']
-#         )
-
-#     story_media = None
-#     if media:
-#         story_media = StoryMedia(
-#             media_pk=media['media_pk'],
-#             x=media['x'],
-#             y=media['y'],
-#             width=media['width'],
-#             height=media['height']
-#         )
-
-#     try:
-#         media_obj = cl.video_upload_to_story(
-#             full_path,
-#             caption,
-#             mentions=[story_mention] if story_mention else None,
-#             links=[story_link] if story_link else None,
-#             hashtags=[story_hashtag] if story_hashtag else None,
-#             medias=[story_media] if story_media else None
-#         )
-#     except Exception as e:
-#         import traceback
-#         traceback.print_exc()
-#         raise Exception(f"Story upload failed: {str(e)}")
-
-#     return {"status": "uploaded", "media_id": media_obj.pk}
-
 def create_highlight(username, title, story_media_ids, cover_story_id=None):
-    if username not in user_sessions:
-        raise Exception("Not logged in")
-    cl = user_sessions[username]
-    highlight = cl.highlight_create(
-        title=title,
-        story_ids=story_media_ids,
-        cover_story_id=cover_story_id or story_media_ids[0]
-    )
-    return {"highlight_id": highlight.pk, "title": highlight.title}
+    cl = user_sessions.get(username) or load_or_login_user(username)
+    try:
+        highlight = cl.highlight_create(
+            title=title,
+            story_ids=story_media_ids,
+            cover_story_id=cover_story_id or story_media_ids[0]
+        )
+        return {"highlight_id": highlight.pk, "title": highlight.title}
+    except Exception as e:
+        raise Exception(f"Highlight creation failed: {str(e)}")
 
 def add_to_highlight(username, highlight_id, story_media_ids):
-    if username not in user_sessions:
-        raise Exception("Not logged in")
-    cl = user_sessions[username]
-    highlight = cl.highlight_add_stories(highlight_id, story_media_ids)
-    return {"highlight_id": highlight.pk, "media_count": len(highlight.media_ids)}
+    cl = user_sessions.get(username) or load_or_login_user(username)
+    try:
+        highlight = cl.highlight_add_stories(highlight_id, story_media_ids)
+        return {"highlight_id": highlight.pk, "media_count": len(highlight.media_ids)}
+    except Exception as e:
+        raise Exception(f"Add to highlight failed: {str(e)}")

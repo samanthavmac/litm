@@ -2,9 +2,10 @@ from flask import Blueprint, request, jsonify, Response
 from app.services.audio_services import recognize_song, find_popular
 from app.services.video_services import extract_clip_from_local_video
 from app.services.messaging_services import send_message
-from app.services.db_service import get_stories_by_session
+from app.services.db_service import get_stories_by_session, get_user, create_user, verify_user
 from twilio.twiml.messaging_response import MessagingResponse
-from app.services.instagram_services import login_user, upload_story, create_highlight, add_to_highlight
+from app.services.instagram_services import login_user, upload_story, create_highlight, add_to_highlight, user_sessions
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 
 import os
 from app.config import Config
@@ -333,3 +334,40 @@ def create_concert_highlight():
         return jsonify({"status": "highlight_created", "highlight_id": highlight.pk})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+    
+@bp.route('/user/register', methods=['POST'])
+def register_user():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    phone_number = data.get('phone_number')
+
+    if not all([username, password, phone_number]):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    if get_user(username):
+        return jsonify({"error": "User already exists"}), 400
+
+    create_user(username, password, phone_number)
+    return jsonify({"status": "User registered successfully"})
+
+@bp.route('/user/login', methods=['POST'])
+def user_login():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+
+    user = verify_user(username, password)
+    if not user:
+        return jsonify({"error": "Invalid username or password"}), 401
+
+    access_token = create_access_token(identity=username)
+    return jsonify({"access_token": access_token})
+
+@bp.route('/user/logout', methods=['POST'])
+@jwt_required()
+def user_logout():
+    username = get_jwt_identity()
+    if username in user_sessions:
+        del user_sessions[username]
+    return jsonify({"status": "logged_out", "username": username})
